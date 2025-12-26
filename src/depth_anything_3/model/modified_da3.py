@@ -88,32 +88,32 @@ class DepthAnything3Net(nn.Module):
             gs_out_dim = self.gs_adapter.d_in + 1
             if isinstance(gs_head, nn.Module):
                 assert (
-                    gs_head.out_dim == gs_out_dim
+                        gs_head.out_dim == gs_out_dim
                 ), f"gs_head.out_dim should be {gs_out_dim}, got {gs_head.out_dim}"
                 self.gs_head = gs_head
             else:
                 assert (
-                    gs_head["output_dim"] == gs_out_dim
+                        gs_head["output_dim"] == gs_out_dim
                 ), f"gs_head output_dim should set to {gs_out_dim}, got {gs_head['output_dim']}"
                 self.gs_head = create_object(_wrap_cfg(gs_head))
 
     def forward(
-        self,
-        x: torch.Tensor,
-        extrinsics: torch.Tensor | None = None,
-        intrinsics: torch.Tensor | None = None,
-        export_feat_layers: list[int] | None = [],
-        infer_gs: bool = False,
-        use_ray_pose: bool = False,
-        ref_view_strategy: str = "saddle_balanced",
+            self,
+            x: torch.Tensor,
+            extrinsics: torch.Tensor | None = None,
+            intrinsics: torch.Tensor | None = None,
+            export_feat_layers: list[int] | None = [],
+            infer_gs: bool = False,
+            use_ray_pose: bool = False,
+            ref_view_strategy: str = "saddle_balanced",
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass through the network.
 
         Args:
             x: Input images (B, N, 3, H, W)
-            extrinsics: Camera extrinsics (B, N, 4, 4) 
-            intrinsics: Camera intrinsics (B, N, 3, 3) 
+            extrinsics: Camera extrinsics (B, N, 4, 4)
+            intrinsics: Camera intrinsics (B, N, 3, 3)
             feat_layers: List of layer indices to extract features from
             infer_gs: Enable Gaussian Splatting branch
             use_ray_pose: Use ray-based pose estimation
@@ -129,8 +129,7 @@ class DepthAnything3Net(nn.Module):
         else:
             cam_token = None
 
-        :wq
-        \feats, aux_feats = self.backbone(
+        feats, aux_feats = self.backbone(
             x, cam_token=cam_token, export_feat_layers=export_feat_layers, ref_view_strategy=ref_view_strategy
         )
         # feats = [[item for item in feat] for feat in feats]
@@ -145,8 +144,8 @@ class DepthAnything3Net(nn.Module):
                 output = self._process_camera_estimation(feats, H, W, output)
             if infer_gs:
                 output = self._process_gs_head(feats, H, W, output, x, extrinsics, intrinsics)
-        
-        output = self._process_mono_sky_estimation(output)    
+
+        output = self._process_mono_sky_estimation(output)
 
         # Extract auxiliary features if requested
         output.aux = self._extract_auxiliary_features(aux_feats, export_feat_layers, H, W)
@@ -154,7 +153,7 @@ class DepthAnything3Net(nn.Module):
         return output
 
     def _process_mono_sky_estimation(
-        self, output: Dict[str, torch.Tensor]
+            self, output: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
         """Process mono sky estimation."""
         if "sky" not in output:
@@ -164,7 +163,7 @@ class DepthAnything3Net(nn.Module):
             return output
         if (~non_sky_mask).sum() <= 10:
             return output
-        
+
         non_sky_depth = output.depth[non_sky_mask]
         if non_sky_depth.numel() > 100000:
             idx = torch.randint(0, non_sky_depth.numel(), (100000,), device=non_sky_depth.device)
@@ -180,7 +179,7 @@ class DepthAnything3Net(nn.Module):
         return output
 
     def _process_ray_pose_estimation(
-        self, output: Dict[str, torch.Tensor], height: int, width: int
+            self, output: Dict[str, torch.Tensor], height: int, width: int
     ) -> Dict[str, torch.Tensor]:
         """Process ray pose estimation if ray pose decoder is available."""
         if "ray" in output and "ray_conf" in output:
@@ -190,37 +189,31 @@ class DepthAnything3Net(nn.Module):
                 output.ray.shape[-3],
                 output.ray.shape[-2],
             )
-            pred_extrinsic = affine_inverse(pred_extrinsic) # w2c -> c2w
+            pred_extrinsic = affine_inverse(pred_extrinsic)  # w2c -> c2w
             pred_extrinsic = pred_extrinsic[:, :, :3, :]
-            pred_intrinsic = torch.eye(3, 3)[None, None].repeat(pred_extrinsic.shape[0], pred_extrinsic.shape[1], 1, 1).clone().to(pred_extrinsic.device)
+            pred_intrinsic = torch.eye(3, 3)[None, None].repeat(pred_extrinsic.shape[0], pred_extrinsic.shape[1], 1,
+                                                                1).clone().to(pred_extrinsic.device)
             pred_intrinsic[:, :, 0, 0] = pred_focal_lengths[:, :, 0] / 2 * width
             pred_intrinsic[:, :, 1, 1] = pred_focal_lengths[:, :, 1] / 2 * height
             pred_intrinsic[:, :, 0, 2] = pred_principal_points[:, :, 0] * width * 0.5
             pred_intrinsic[:, :, 1, 2] = pred_principal_points[:, :, 1] * height * 0.5
-            del output.ray
-            del output.ray_conf
+
             output.extrinsics = pred_extrinsic
             output.intrinsics = pred_intrinsic
         return output
 
     def _process_depth_head(
-        self, feats: list[torch.Tensor], H: int, W: int
+            self, feats: list[torch.Tensor], H: int, W: int
     ) -> Dict[str, torch.Tensor]:
         """Process features through the depth prediction head."""
         return self.head(feats, H, W, patch_start_idx=0)
 
     def _process_camera_estimation(
-        self, feats: list[torch.Tensor], H: int, W: int, output: Dict[str, torch.Tensor]
+            self, feats: list[torch.Tensor], H: int, W: int, output: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
         """Process camera pose estimation if camera decoder is available."""
         if self.cam_dec is not None:
             pose_enc = self.cam_dec(feats[-1][1])
-            # Remove ray information as it's not needed for pose estimation
-            if "ray" in output:
-                del output.ray
-            if "ray_conf" in output:
-                del output.ray_conf
-
             # Convert pose encoding to extrinsics and intrinsics
             c2w, ixt = pose_encoding_to_extri_intri(pose_enc, (H, W))
             output.extrinsics = affine_inverse(c2w)
@@ -229,14 +222,14 @@ class DepthAnything3Net(nn.Module):
         return output
 
     def _process_gs_head(
-        self,
-        feats: list[torch.Tensor],
-        H: int,
-        W: int,
-        output: Dict[str, torch.Tensor],
-        in_images: torch.Tensor,
-        extrinsics: torch.Tensor | None = None,
-        intrinsics: torch.Tensor | None = None,
+            self,
+            feats: list[torch.Tensor],
+            H: int,
+            W: int,
+            output: Dict[str, torch.Tensor],
+            in_images: torch.Tensor,
+            extrinsics: torch.Tensor | None = None,
+            intrinsics: torch.Tensor | None = None,
     ) -> Dict[str, torch.Tensor]:
         """Process 3DGS parameters estimation if 3DGS head is available."""
         if self.gs_head is None or self.gs_adapter is None:
@@ -249,7 +242,7 @@ class DepthAnything3Net(nn.Module):
         ctx_extr = output.get("extrinsics", None)
         ctx_intr = output.get("intrinsics", None)
         assert (
-            ctx_extr is not None and ctx_intr is not None
+                ctx_extr is not None and ctx_intr is not None
         ), "must process camera info first if GT is not available"
 
         gt_extr = extrinsics
@@ -285,7 +278,7 @@ class DepthAnything3Net(nn.Module):
         return output
 
     def _extract_auxiliary_features(
-        self, feats: list[torch.Tensor], feat_layers: list[int], H: int, W: int
+            self, feats: list[torch.Tensor], feat_layers: list[int], H: int, W: int
     ) -> Dict[str, torch.Tensor]:
         """Extract auxiliary features from specified layers."""
         aux_features = Dict()
@@ -335,14 +328,14 @@ class NestedDepthAnything3Net(nn.Module):
         self.da3_metric = create_object(metric)
 
     def forward(
-        self,
-        x: torch.Tensor,
-        extrinsics: torch.Tensor | None = None,
-        intrinsics: torch.Tensor | None = None,
-        export_feat_layers: list[int] | None = [],
-        infer_gs: bool = False,
-        use_ray_pose: bool = False,
-        ref_view_strategy: str = "saddle_balanced",
+            self,
+            x: torch.Tensor,
+            extrinsics: torch.Tensor | None = None,
+            intrinsics: torch.Tensor | None = None,
+            export_feat_layers: list[int] | None = [],
+            infer_gs: bool = False,
+            use_ray_pose: bool = False,
+            ref_view_strategy: str = "saddle_balanced",
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass through both branches with metric scaling alignment.
@@ -361,7 +354,8 @@ class NestedDepthAnything3Net(nn.Module):
         """
         # Get predictions from both branches
         output = self.da3(
-            x, extrinsics, intrinsics, export_feat_layers=export_feat_layers, infer_gs=infer_gs, use_ray_pose=use_ray_pose, ref_view_strategy=ref_view_strategy
+            x, extrinsics, intrinsics, export_feat_layers=export_feat_layers, infer_gs=infer_gs,
+            use_ray_pose=use_ray_pose, ref_view_strategy=ref_view_strategy
         )
         metric_output = self.da3_metric(x)
 
@@ -373,7 +367,7 @@ class NestedDepthAnything3Net(nn.Module):
         return output
 
     def _apply_metric_scaling(
-        self, output: Dict[str, torch.Tensor], metric_output: Dict[str, torch.Tensor]
+            self, output: Dict[str, torch.Tensor], metric_output: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
         """Apply metric scaling to the metric depth output."""
         # Scale metric depth based on camera intrinsics
@@ -384,7 +378,7 @@ class NestedDepthAnything3Net(nn.Module):
         return output
 
     def _apply_depth_alignment(
-        self, output: Dict[str, torch.Tensor], metric_output: Dict[str, torch.Tensor]
+            self, output: Dict[str, torch.Tensor], metric_output: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
         """Apply depth alignment using least squares scaling."""
         # Compute non-sky mask
@@ -417,10 +411,10 @@ class NestedDepthAnything3Net(nn.Module):
         return output
 
     def _handle_sky_regions(
-        self,
-        output: Dict[str, torch.Tensor],
-        metric_output: Dict[str, torch.Tensor],
-        sky_depth_def: float = 200.0,
+            self,
+            output: Dict[str, torch.Tensor],
+            metric_output: Dict[str, torch.Tensor],
+            sky_depth_def: float = 200.0,
     ) -> Dict[str, torch.Tensor]:
         """Handle sky regions by setting them to maximum depth."""
         non_sky_mask = compute_sky_mask(metric_output.sky, threshold=0.3)

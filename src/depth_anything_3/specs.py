@@ -43,3 +43,4 @@ class Prediction:
     gaussians: Gaussians | None = None  # 3D gaussians
     aux: dict[str, Any] = None  #
     scale_factor: Optional[float] = None  # metric scale
+    ray: np.ndarray | None = None  # N, H, W, 6 - ray directions

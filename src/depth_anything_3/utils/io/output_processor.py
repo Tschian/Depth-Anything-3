@@ -62,6 +62,21 @@ class OutputProcessor:
         gaussians = model_output.get("gaussians", None)
         scale_factor = model_output.get("scale_factor", None)
 
+        if model_output.get("ray", None) is not None:
+            ray = self._extract_ray(model_output)
+            return Prediction(
+                depth=depth,
+                sky=sky,
+                conf=conf,
+                extrinsics=extrinsics,
+                intrinsics=intrinsics,
+                is_metric=getattr(model_output, "is_metric", 0),
+                gaussians=gaussians,
+                aux=aux,
+                scale_factor=scale_factor,
+                ray=ray,
+            )
+
         return Prediction(
             depth=depth,
             sky=sky,
@@ -73,6 +88,20 @@ class OutputProcessor:
             aux=aux,
             scale_factor=scale_factor,
         )
+
+    def _extract_ray(self, model_output: dict[str, torch.Tensor]) -> np.ndarray:
+        """
+        Extract depth tensor from model output and convert to numpy.
+
+        Args:
+            model_output: Model output dictionary
+
+        Returns:
+            Depth array with shape (N, H, W)
+        """
+        ray = model_output["ray"].squeeze(0).squeeze(-1).cpu().numpy()  # (N, H, W, 6)
+        return ray
+
 
     def _extract_depth(self, model_output: dict[str, torch.Tensor]) -> np.ndarray:
         """
