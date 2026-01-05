@@ -290,12 +290,12 @@ class DepthAnything3(nn.Module, PyTorchModelHubMixin):
             process_res_method,
         )
         end_time = time.time()
-        logger.info(
-            "Processed Images Done taking",
-            end_time - start_time,
-            "seconds. Shape: ",
-            imgs_cpu.shape,
-        )
+        # logger.info(
+        #     "Processed Images Done taking",
+        #     end_time - start_time,
+        #     "seconds. Shape: ",
+        #     imgs_cpu.shape,
+        # )
         return imgs_cpu, extrinsics, intrinsics
 
     def _prepare_model_inputs(
@@ -385,7 +385,7 @@ class DepthAnything3(nn.Module, PyTorchModelHubMixin):
         if need_sync:
             torch.cuda.synchronize(device)
         end_time = time.time()
-        logger.info(f"Model Forward Pass Done. Time: {end_time - start_time} seconds")
+        # logger.info(f"Model Forward Pass Done. Time: {end_time - start_time} seconds")
         return output
 
     def _convert_to_prediction(self, raw_output: dict[str, torch.Tensor]) -> Prediction:
@@ -393,7 +393,7 @@ class DepthAnything3(nn.Module, PyTorchModelHubMixin):
         start_time = time.time()
         output = self.output_processor(raw_output)
         end_time = time.time()
-        logger.info(f"Conversion to Prediction Done. Time: {end_time - start_time} seconds")
+        # logger.info(f"Conversion to Prediction Done. Time: {end_time - start_time} seconds")
         return output
 
     def _add_processed_images(self, prediction: Prediction, imgs_cpu: torch.Tensor) -> Prediction:

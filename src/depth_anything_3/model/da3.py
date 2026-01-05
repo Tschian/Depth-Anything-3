@@ -129,8 +129,7 @@ class DepthAnything3Net(nn.Module):
         else:
             cam_token = None
 
-        :wq
-        \feats, aux_feats = self.backbone(
+        feats, aux_feats = self.backbone(
             x, cam_token=cam_token, export_feat_layers=export_feat_layers, ref_view_strategy=ref_view_strategy
         )
         # feats = [[item for item in feat] for feat in feats]
